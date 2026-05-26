@@ -1,0 +1,33 @@
+version: 2
+
+exposures:
+  - name: dashboard_vendas_powerbi
+    label: "Dashboard de Vendas (Power BI)"
+    type: dashboard
+    maturity: high
+    url: https://app.powerbi.com/groups/me/reports/lakehouse-olist-vendas
+    description: >
+      Dashboard executivo de vendas no Power BI. Consome fct_orders e
+      dim_customers para acompanhar receita, ticket médio e SLA de entrega.
+    depends_on:
+      - ref('fct_orders')
+      - ref('dim_customers')
+      - ref('dim_products')
+    owner:
+      name: Time de BI
+      email: bi@lakehouse-olist.example
+
+  - name: analise_marketing_tableau
+    label: "Análise de Marketing (Tableau)"
+    type: dashboard
+    maturity: medium
+    url: https://tableau.example/views/lakehouse-olist/marketing
+    description: >
+      Workbook do Tableau com cohorts de clientes, LTV estimado e taxa de
+      recompra por estado. Consome marketing_kpis.
+    depends_on:
+      - ref('marketing_kpis')
+      - ref('dim_customers')
+    owner:
+      name: Time de Marketing
+      email: marketing@lakehouse-olist.example

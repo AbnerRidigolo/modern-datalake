@@ -1,0 +1,43 @@
+name: "lakehouse_olist"
+version: "1.0.0"
+config-version: 2
+
+profile: "lakehouse_olist"
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+seed-paths: ["seeds"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Variáveis usadas pelos models (ex.: deduplicação incremental)
+vars:
+  lookback_days: 7
+
+models:
+  lakehouse_olist:
+    # Silver — staging (incremental)
+    staging:
+      +materialized: incremental
+      +schema: silver
+      +incremental_strategy: merge
+      +file_format: delta
+    # Joins e enriquecimentos
+    intermediate:
+      +materialized: view
+      +schema: silver
+    # Gold — marts (table)
+    marts:
+      +materialized: table
+      +schema: gold
+      +file_format: delta
+
+snapshots:
+  lakehouse_olist:
+    +target_schema: gold
+    +file_format: delta

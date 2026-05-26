@@ -1,0 +1,31 @@
+# Ambiente
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Dados (não versionar CSVs/Delta)
+data/raw/*.csv
+data/delta/
+*.parquet
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+.user.yml
+
+# Great Expectations
+data_quality/uncommitted/
+
+# Spark / Airflow
+spark-warehouse/
+metastore_db/
+derby.log
+airflow/logs/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store

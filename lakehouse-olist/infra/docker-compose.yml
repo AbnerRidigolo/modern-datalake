@@ -1,0 +1,189 @@
+x-airflow-common: &airflow-common
+  build:
+    context: ..
+    dockerfile: infra/airflow.Dockerfile
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+    AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+    AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    AWS_ENDPOINT_URL: http://minio:9000
+    SPARK_MASTER_URL: spark://spark-master:7077
+  volumes:
+    - ../airflow/dags:/opt/airflow/dags
+    - ../ingestion:/opt/airflow/ingestion
+    - ../dbt:/opt/airflow/dbt
+    - ../data_quality:/opt/airflow/data_quality
+    - airflow-logs:/opt/airflow/logs
+  depends_on: &airflow-common-depends
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: lakehouse-postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+      POSTGRES_MULTIPLE_DATABASES: airflow,metastore
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: lakehouse-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  minio-setup:
+    image: minio/mc:latest
+    container_name: lakehouse-minio-setup
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
+      mc mb -p local/lakehouse-bronze;
+      mc mb -p local/lakehouse-silver;
+      mc mb -p local/lakehouse-gold;
+      mc mb -p local/lakehouse-raw;
+      echo 'Buckets criados com sucesso';
+      exit 0;
+      "
+
+  spark-master:
+    build:
+      context: ..
+      dockerfile: infra/spark.Dockerfile
+    container_name: lakehouse-spark-master
+    command: ["/opt/bitnami/scripts/spark/run.sh"]
+    environment:
+      SPARK_MODE: master
+      SPARK_MASTER_HOST: spark-master
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      AWS_ENDPOINT_URL: http://minio:9000
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+    volumes:
+      - ../ingestion:/opt/app/ingestion
+      - ../data:/opt/app/data
+      - delta-data:/opt/app/delta
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  spark-worker:
+    build:
+      context: ..
+      dockerfile: infra/spark.Dockerfile
+    container_name: lakehouse-spark-worker
+    command: ["/opt/bitnami/scripts/spark/run.sh"]
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_WORKER_MEMORY: 2G
+      SPARK_WORKER_CORES: 2
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      AWS_ENDPOINT_URL: http://minio:9000
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    volumes:
+      - ../ingestion:/opt/app/ingestion
+      - ../data:/opt/app/data
+      - delta-data:/opt/app/delta
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  airflow-init:
+    <<: *airflow-common
+    container_name: lakehouse-airflow-init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate
+        airflow users create \
+          --username admin --password admin \
+          --firstname Admin --lastname User \
+          --role Admin --email admin@example.com || true
+    restart: on-failure
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: lakehouse-airflow-webserver
+    command: webserver
+    ports:
+      - "8081:8080"
+    depends_on:
+      <<: *airflow-common-depends
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: lakehouse-airflow-scheduler
+    command: scheduler
+    depends_on:
+      <<: *airflow-common-depends
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8974/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  minio-data:
+  delta-data:
+  airflow-logs:
+
+networks:
+  default:
+    name: lakehouse-net

@@ -1,0 +1,163 @@
+version: 2
+
+models:
+  # =========================================================================
+  # SILVER — staging
+  # =========================================================================
+  - name: stg_orders
+    description: "Pedidos limpos e deduplicados (Silver). Grão: 1 linha por pedido."
+    columns:
+      - name: order_id
+        description: "Identificador único do pedido."
+        tests: [not_null, unique]
+      - name: customer_id
+        description: "FK para o cliente (único por pedido no dataset Olist)."
+        tests: [not_null]
+      - name: order_status
+        description: "Status do pedido, normalizado em minúsculas."
+        tests:
+          - accepted_values:
+              values: ['delivered', 'shipped', 'canceled', 'unavailable',
+                       'invoiced', 'processing', 'created', 'approved']
+      - name: order_purchase_at
+        description: "Timestamp da compra (UTC)."
+      - name: order_delivered_customer_at
+        description: "Timestamp da entrega ao cliente (UTC), nulo se não entregue."
+
+  - name: stg_customers
+    description: "Clientes limpos e deduplicados (Silver). Grão: 1 linha por customer_id."
+    columns:
+      - name: customer_id
+        description: "Identificador único do cliente por pedido."
+        tests: [not_null, unique]
+      - name: customer_unique_id
+        description: "Identificador estável do cliente entre pedidos."
+        tests: [not_null]
+      - name: customer_state
+        description: "UF do cliente (2 letras, maiúsculas)."
+        tests: [not_null]
+
+  - name: stg_products
+    description: "Produtos limpos e deduplicados (Silver). Grão: 1 linha por product_id."
+    columns:
+      - name: product_id
+        description: "Identificador único do produto."
+        tests: [not_null, unique]
+      - name: product_category_name
+        description: "Categoria do produto; 'sem_categoria' quando ausente."
+        tests: [not_null]
+
+  - name: stg_payments
+    description: "Pagamentos limpos e deduplicados (Silver). Grão: 1 linha por pedido+sequencial."
+    columns:
+      - name: payment_key
+        description: "Chave sintética = order_id + payment_sequential."
+        tests: [not_null, unique]
+      - name: order_id
+        description: "FK para o pedido."
+        tests: [not_null]
+      - name: payment_type
+        description: "Tipo de pagamento normalizado."
+        tests:
+          - accepted_values:
+              values: ['credit_card', 'boleto', 'voucher', 'debit_card', 'not_defined']
+      - name: payment_value
+        description: "Valor do pagamento em BRL."
+
+  - name: stg_order_reviews
+    description: "Avaliações limpas e deduplicadas (Silver). Grão: 1 linha por review_id."
+    columns:
+      - name: review_id
+        description: "Identificador único da avaliação."
+        tests: [not_null, unique]
+      - name: order_id
+        description: "FK para o pedido avaliado."
+        tests: [not_null]
+      - name: review_score
+        description: "Nota da avaliação de 1 a 5."
+        tests:
+          - accepted_values:
+              values: [1, 2, 3, 4, 5]
+
+  # =========================================================================
+  # INTERMEDIATE
+  # =========================================================================
+  - name: int_orders_enriched
+    description: >
+      Pedido enriquecido com cliente, agregados de pagamento e avaliação.
+      Base intermediária para os marts. Grão: 1 linha por pedido.
+    columns:
+      - name: order_id
+        description: "Identificador único do pedido."
+        tests: [not_null, unique]
+      - name: total_payment_value
+        description: "Soma dos pagamentos do pedido (BRL)."
+      - name: delivery_days
+        description: "Dias entre aprovação e entrega ao cliente."
+
+  # =========================================================================
+  # GOLD — marts
+  # =========================================================================
+  - name: fct_orders
+    description: "Fato de pedidos (Gold). Grão: 1 linha por pedido, com métricas calculadas."
+    columns:
+      - name: order_id
+        description: "Identificador único do pedido."
+        tests: [not_null, unique]
+      - name: delivery_tier
+        description: "Classificação de velocidade da entrega."
+        tests:
+          - accepted_values:
+              values: ['rapido', 'medio', 'lento', 'muito_lento', 'sem_entrega']
+      - name: revenue_bucket
+        description: "Faixa de receita do pedido."
+        tests:
+          - accepted_values:
+              values: ['baixo', 'medio', 'alto', 'premium']
+      - name: total_payment_value
+        description: "Receita total do pedido (BRL)."
+      - name: delivered_on_time
+        description: "True se entregue até a data estimada."
+
+  - name: dim_customers
+    description: "Dimensão de clientes com SCD Tipo 2 (Gold), via snapshot snap_customers."
+    columns:
+      - name: customer_sk
+        description: "Surrogate key da versão do cliente (unique_id + valid_from)."
+        tests: [not_null, unique]
+      - name: customer_unique_id
+        description: "Identificador estável do cliente."
+        tests: [not_null]
+      - name: is_current
+        description: "True para a versão vigente do registro."
+        tests: [not_null]
+      - name: lifetime_value
+        description: "Receita acumulada do cliente (BRL)."
+
+  - name: dim_products
+    description: "Dimensão de produtos (Gold) com faixas de peso e volume."
+    columns:
+      - name: product_id
+        description: "Identificador único do produto."
+        tests: [not_null, unique]
+      - name: weight_tier
+        description: "Faixa de peso do produto."
+        tests:
+          - accepted_values:
+              values: ['leve', 'medio', 'pesado', 'desconhecido']
+
+  - name: marketing_kpis
+    description: >
+      KPIs de marketing por estado e cohort mensal (Gold): clientes, LTV
+      estimado, ticket médio e taxa de recompra.
+    columns:
+      - name: customer_state
+        description: "UF do cliente."
+        tests: [not_null]
+      - name: cohort_month
+        description: "Mês da primeira compra (cohort de aquisição)."
+        tests: [not_null]
+      - name: repurchase_rate_pct
+        description: "Percentual de clientes do cohort que compraram mais de uma vez."
+      - name: estimated_ltv
+        description: "Receita média por cliente do cohort (LTV estimado, BRL)."

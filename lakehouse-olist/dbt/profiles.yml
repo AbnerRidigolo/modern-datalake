@@ -1,0 +1,14 @@
+# Profile dbt-spark. Em produção mova para ~/.dbt/profiles.yml.
+# Usa thrift server do Spark; variáveis lidas do ambiente (.env).
+lakehouse_olist:
+  target: dev
+  outputs:
+    dev:
+      type: spark
+      method: thrift
+      host: "{{ env_var('DBT_SPARK_HOST', 'spark-master') }}"
+      port: "{{ env_var('DBT_SPARK_PORT', '10000') | int }}"
+      schema: "{{ env_var('DBT_SCHEMA', 'lakehouse') }}"
+      threads: 4
+      connect_retries: 5
+      connect_timeout: 60

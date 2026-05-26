@@ -1,0 +1,22 @@
+[project]
+name = "lakehouse-olist"
+version = "1.0.0"
+description = "Modern Data Lakehouse sobre o dataset Brazilian E-Commerce (Olist)"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra -q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+disallow_untyped_defs = true

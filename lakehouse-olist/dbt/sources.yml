@@ -1,0 +1,46 @@
+version: 2
+
+sources:
+  - name: bronze
+    description: >
+      Camada Bronze (Delta Lake) gerada pelos jobs Spark de ingestão. Tabelas
+      brutas do dataset Olist com colunas de auditoria (`_ingested_at`,
+      `_source`, `_batch_date`).
+    schema: lakehouse_bronze
+    # Freshness padrão: alerta após 1 dia, erro após 2 dias.
+    freshness:
+      warn_after: { count: 24, period: hour }
+      error_after: { count: 48, period: hour }
+    loaded_at_field: _ingested_at
+
+    tables:
+      - name: orders
+        description: Pedidos brutos (olist_orders_dataset).
+        columns:
+          - name: order_id
+            description: Identificador único do pedido.
+            tests: [not_null]
+      - name: customers
+        description: Clientes brutos (olist_customers_dataset).
+        columns:
+          - name: customer_id
+            description: Identificador único do cliente (por pedido).
+            tests: [not_null]
+      - name: products
+        description: Produtos brutos (olist_products_dataset).
+        columns:
+          - name: product_id
+            description: Identificador único do produto.
+            tests: [not_null]
+      - name: payments
+        description: Pagamentos brutos (olist_order_payments_dataset).
+        columns:
+          - name: order_id
+            description: Identificador do pedido associado ao pagamento.
+            tests: [not_null]
+      - name: order_reviews
+        description: Avaliações brutas (olist_order_reviews_dataset).
+        columns:
+          - name: review_id
+            description: Identificador único da avaliação.
+            tests: [not_null]
