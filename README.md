@@ -165,31 +165,4 @@ lakehouse-olist/
 └── README.md
 ```
 
----
-
-## 7. LinkedIn Post (sugestão)
-
-> 🚀 Acabei de construir um **Modern Data Lakehouse** completo, do zero, com as
-> ferramentas que dominam a engenharia de dados hoje.
->
-> Usei o dataset público da Olist (e-commerce brasileiro) para implementar a
-> arquitetura **Medallion** de ponta a ponta:
->
-> 🥉 **Bronze** — PySpark + Delta Lake, com ingestão idempotente (MERGE),
-> colunas de auditoria e time travel
-> 🥈 **Silver** — dbt incremental, deduplicação com ROW_NUMBER(), testes de
-> qualidade em todos os models
-> 🥇 **Gold** — fatos e dimensões (incluindo SCD Tipo 2 via dbt snapshot) +
-> KPIs de marketing (LTV, cohort, taxa de recompra)
->
-> 🔧 Stack: PySpark · Delta Lake · dbt · Apache Airflow · Great Expectations ·
-> Docker · Terraform (AWS S3 + Glue) · MinIO
->
-> ✅ Pipeline orquestrado no Airflow com TaskGroups, SLA de 2h e data quality
-> automatizada. Tudo sobe localmente com **um `make setup`** — sem precisar de
-> conta AWS para desenvolver.
->
-> Próximos passos: streaming com Spark Structured Streaming e camada de
-> observabilidade. 👇 Código aberto nos comentários!
->
-> #DataEngineering #Lakehouse #DeltaLake #dbt #ApacheAirflow #PySpark #AWS #DataQuality
+---DataEngineering #Lakehouse #DeltaLake #dbt #ApacheAirflow #PySpark #AWS #DataQuality
