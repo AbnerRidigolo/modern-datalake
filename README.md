@@ -44,13 +44,15 @@ Gold) com Delta Lake, dbt, Airflow e infraestrutura como código.
 
 ---
 
-## 2. Setup em 5 comandos
+## 2. Executar localmente
 
 ```bash
-git clone <repo> && cd lakehouse-olist
+git clone https://github.com/AbnerRidigolo/modern-datalake.git
+cd modern-datalake/lakehouse-olist
 make setup                       # cria .env, builda imagens e sobe tudo
 # baixe os CSVs do Olist em data/raw/ (ver seção 3)
 make ingest                      # Bronze: roda os spark jobs
+make dbt-deps                    # instala as dependências do dbt
 make transform                   # Silver + Gold: dbt snapshot + run + test
 make docs                        # gera e serve a documentação dbt
 ```
